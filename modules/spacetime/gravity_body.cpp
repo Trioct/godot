@@ -31,6 +31,7 @@ GravityBody::GravityBody() {
 	y = 0.0;
 	vel_x = 0.0;
 	vel_y = 0.0;
+	previous_timescale = 1.0;
 	timescale = 1.0;
 	last_accel_x = 0.0;
 	last_accel_y = 0.0;
@@ -45,11 +46,14 @@ void GravityBody::_notification(int p_what) {
 			if (Engine::get_singleton()->is_editor_hint()) {
 				break;
 			}
+			set_significance(is_significant);
 			set_physics_process_internal(true);
 			set_use_custom_integrator(true);
-			set_significance(is_significant);
-			if (!is_significant) {
+			if (is_significant) {
+				set_mode(RigidBody2D::MODE_KINEMATIC);
+			} else {
 				set_linear_velocity(Vector2(vel_x, vel_y));
+				set_mode(RigidBody2D::MODE_RIGID);
 			}
 			if (x == 0 && y == 0) {
 				x = get_position().x;
@@ -139,7 +143,6 @@ void GravityBody::set_significance(bool value) {
 			remove_from_group("insignificant_bodies");
 		}
 		add_to_group("significant_bodies");
-		set_mode(RigidBody2D::MODE_KINEMATIC);
 	} else {
 		if (is_in_group("significant_bodies")) {
 			remove_from_group("significant_bodies");
