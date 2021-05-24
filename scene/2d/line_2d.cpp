@@ -48,6 +48,7 @@ Line2D::Line2D() {
 	_sharp_limit = 2.f;
 	_round_precision = 8;
 	_antialiased = false;
+	_start = 0;
 }
 
 #ifdef TOOLS_ENABLED
@@ -85,6 +86,15 @@ bool Line2D::_edit_is_selected_on_click(const Point2 &p_point, double p_toleranc
 void Line2D::set_points(const PoolVector<Vector2> &p_points) {
 	_points = p_points;
 	update();
+}
+
+void Line2D::set_start(int p_start) {
+	_start = p_start;
+	update();
+}
+
+int Line2D::get_start() const {
+	return _start;
 }
 
 void Line2D::set_width(float p_width) {
@@ -285,7 +295,7 @@ void Line2D::_draw() {
 	{
 		PoolVector<Vector2>::Read points_read = _points.read();
 		for (int i = 0; i < len; ++i) {
-			points.write[i] = points_read[i];
+			points.write[i] = points_read[(i + _start) % len];
 		}
 	}
 
@@ -366,6 +376,9 @@ void Line2D::_bind_methods() {
 
 	ClassDB::bind_method(D_METHOD("clear_points"), &Line2D::clear_points);
 
+	ClassDB::bind_method(D_METHOD("set_start", "start"), &Line2D::set_start);
+	ClassDB::bind_method(D_METHOD("get_start"), &Line2D::get_start);
+
 	ClassDB::bind_method(D_METHOD("set_width", "width"), &Line2D::set_width);
 	ClassDB::bind_method(D_METHOD("get_width"), &Line2D::get_width);
 
@@ -403,6 +416,7 @@ void Line2D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_antialiased"), &Line2D::get_antialiased);
 
 	ADD_PROPERTY(PropertyInfo(Variant::POOL_VECTOR2_ARRAY, "points"), "set_points", "get_points");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "start"), "set_start", "get_start");
 	ADD_PROPERTY(PropertyInfo(Variant::REAL, "width"), "set_width", "get_width");
 	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "width_curve", PROPERTY_HINT_RESOURCE_TYPE, "Curve"), "set_curve", "get_curve");
 	ADD_PROPERTY(PropertyInfo(Variant::COLOR, "default_color"), "set_default_color", "get_default_color");

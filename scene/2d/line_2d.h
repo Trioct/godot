@@ -77,6 +77,9 @@ public:
 	void add_point(Vector2 pos, int atpos = -1);
 	void remove_point(int i);
 
+	void set_start(int start);
+	int get_start() const;
+
 	void set_width(float width);
 	float get_width() const;
 
@@ -137,6 +140,7 @@ private:
 	float _sharp_limit;
 	int _round_precision;
 	bool _antialiased;
+	int _start;
 };
 
 #endif // LINE2D_H
