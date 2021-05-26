@@ -22,11 +22,11 @@ private:
 
 	float128 mass;
 
+	float previous_timescale;
 	float timescale;
 	bool is_rigid;
 	bool is_significant;
 
-	float previous_timescale;
 	float128 last_accel_x;
 	float128 last_accel_y;
 
@@ -57,8 +57,6 @@ public:
 	String get_angular_velocity();
 	void set_mass(String value);
 	String get_mass() const;
-
-	void set_timescale(real_t value);
 
 	void set_significance(bool value);
 	bool get_significance() const;

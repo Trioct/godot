@@ -52,14 +52,14 @@ void GravityIntegrator::integrate(const real_t delta, const real_t timescale,
 		if (!node_i) {
 			continue;
 		}
-		node_i->set_timescale(timescale);
+		node_i->timescale = timescale;
 		for (int j = 0; j < insignificant_bodies.size(); ++j) {
 			GravityBody *node_j =
 					Object::cast_to<GravityBody>(insignificant_bodies[j]);
 			if (!node_j) {
 				continue;
 			}
-			node_j->set_timescale(timescale);
+			node_j->timescale = timescale;
 			std::pair<float128, float128> accel_premass =
 					calc_premass(*node_j, *node_i);
 			node_j->apply_accel(accel_premass.first * node_i->mass,
@@ -79,11 +79,22 @@ void GravityIntegrator::integrate(const real_t delta, const real_t timescale,
 					-accel_premass.second * node_i->mass);
 		}
 	}
+	if (significant_bodies.size() == 0) {
+		for (int i = 0; i < insignificant_bodies.size(); ++i) {
+			GravityBody *node_i =
+					Object::cast_to<GravityBody>(insignificant_bodies[i]);
+			if (!node_i) {
+				continue;
+			}
+			node_i->timescale = timescale;
+		}
+	}
 }
 
 void GravityIntegrator::set_G(real_t value) {
 	G = value;
 }
+
 real_t GravityIntegrator::get_G() {
 	return G;
 }

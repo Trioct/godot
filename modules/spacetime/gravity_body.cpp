@@ -44,7 +44,6 @@ GravityBody::GravityBody() :
 	linear_vel_y = 0.0;
 	angular_vel = 0.0;
 	mass = 1.0;
-	previous_timescale = 1.0;
 	timescale = 1.0;
 	last_accel_x = 0.0;
 	last_accel_y = 0.0;
@@ -64,7 +63,8 @@ void GravityBody::_notification(int p_what) {
 			set_physics_process_internal(true);
 			RID rid = get_rid();
 			Physics2DServer *server = Physics2DServer::get_singleton();
-			server->body_set_param(get_rid(), Physics2DServer::BODY_PARAM_MASS, mass);
+			server->body_set_omit_force_integration(rid, true);
+			server->body_set_param(rid, Physics2DServer::BODY_PARAM_MASS, mass);
 			server->body_set_force_integration_callback(rid, this, "_sync_pos");
 			if (precise_x == 0 && precise_y == 0) {
 				precise_x = get_position().x;
@@ -74,14 +74,24 @@ void GravityBody::_notification(int p_what) {
 		case NOTIFICATION_INTERNAL_PHYSICS_PROCESS: {
 			float delta = get_physics_process_delta_time();
 			float128 warped_delta = delta * timescale;
+
 			linear_vel_x += last_accel_x * warped_delta;
 			linear_vel_y += last_accel_y * warped_delta;
 			precise_x += linear_vel_x * warped_delta;
 			precise_y += linear_vel_y * warped_delta;
-			precise_rotation += angular_vel;
+			precise_rotation += angular_vel * warped_delta;
+
+			set_position(Vector2(precise_x, precise_y));
+			set_rotation(precise_rotation);
+
 			if (is_rigid) {
-				Physics2DServer::get_singleton()->body_set_state(get_rid(), Physics2DServer::BODY_STATE_LINEAR_VELOCITY, Vector2(linear_vel_x, linear_vel_y) * timescale);
+				RID rid = get_rid();
+				Physics2DServer *server = Physics2DServer::get_singleton();
+				server->body_set_state(rid, Physics2DServer::BODY_STATE_LINEAR_VELOCITY, Vector2(linear_vel_x, linear_vel_y) * timescale);
+				server->body_set_state(rid, Physics2DServer::BODY_STATE_ANGULAR_VELOCITY, (float)(angular_vel * timescale));
+				previous_timescale = timescale;
 			}
+
 			last_accel_x = 0.0;
 			last_accel_y = 0.0;
 		} break;
@@ -91,30 +101,27 @@ void GravityBody::_notification(int p_what) {
 void GravityBody::_sync_pos(Object *p_state) {
 	if (is_rigid) {
 		Physics2DDirectBodyState *state = Object::cast_to<Physics2DDirectBodyState>(p_state);
-		if (state->get_contact_count()) {
+		ERR_FAIL_COND_MSG(!state, "Method '_direct_state_changed' must receive a valid Physics2DDirectBodyState object as argument");
+		if (state->get_contact_count() > 0) {
+			set_block_transform_notify(true);
+
 			Transform2D new_transform = state->get_transform();
 			set_global_transform(new_transform);
-			angular_vel = state->get_angular_velocity();
-			linear_vel_x = state->get_linear_velocity().x / timescale;
-			linear_vel_y = state->get_linear_velocity().y / timescale;
-			precise_x = get_position().x;
-			precise_y = get_position().y;
+			angular_vel = state->get_angular_velocity() / previous_timescale;
+			linear_vel_x = state->get_linear_velocity().x / previous_timescale;
+			linear_vel_y = state->get_linear_velocity().y / previous_timescale;
+			precise_x = new_transform.get_origin().x;
+			precise_y = new_transform.get_origin().y;
 			precise_rotation = new_transform.get_rotation();
-			return;
+
+			set_block_transform_notify(false);
 		}
 	}
-	set_position(Vector2(precise_x, precise_y));
-	set_rotation(precise_rotation);
 }
 
 void GravityBody::apply_accel(float128 accel_x, float128 accel_y) {
 	last_accel_x += accel_x;
 	last_accel_y += accel_y;
-}
-
-void GravityBody::set_timescale(real_t value) {
-	previous_timescale = timescale;
-	timescale = value;
 }
 
 void GravityBody::set_precise_x(String value) {
@@ -150,7 +157,7 @@ String GravityBody::get_linear_velocity_x() {
 }
 
 void GravityBody::set_linear_velocity_y(String value) {
-	linear_vel_x = std::stold(value.ascii().ptr());
+	linear_vel_y = std::stold(value.ascii().ptr());
 }
 
 String GravityBody::get_linear_velocity_y() {
