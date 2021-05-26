@@ -6,26 +6,29 @@
 
 typedef long double float128;
 
-class GravityBody : public RigidBody2D {
-	GDCLASS(GravityBody, RigidBody2D);
+class GravityBody : public PhysicsBody2D {
+	GDCLASS(GravityBody, PhysicsBody2D);
 	friend class GravityIntegrator;
 
 private:
-	float128 x;
-	float128 y;
+	float128 precise_x;
+	float128 precise_y;
+	float128 precise_rotation;
 
-	float128 vel_x;
-	float128 vel_y;
+	float128 linear_vel_x;
+	float128 linear_vel_y;
+
+	float128 angular_vel;
+
+	float128 mass;
+
+	float timescale;
+	bool is_rigid;
+	bool is_significant;
 
 	float previous_timescale;
-	float timescale;
 	float128 last_accel_x;
 	float128 last_accel_y;
-
-	float gbody_mass;
-	float128 internal_mass;
-
-	bool is_significant;
 
 protected:
 	static void _bind_methods();
@@ -35,29 +38,33 @@ public:
 	~GravityBody();
 
 	void _notification(int p_what);
-	void _integrate_forces(Variant variant);
+	void _sync_pos(Object *p_state);
 
 	void apply_accel(float128 accel_x, float128 accel_y);
 
-	void set_x(real_t value);
-	real_t get_x() const;
-
-	void set_y(real_t value);
-	real_t get_y() const;
-
-	void set_vel_x(real_t value);
-	real_t get_vel_x() const;
-
-	void set_vel_y(real_t value);
-	real_t get_vel_y() const;
+	// for use only for gdscript
+	void set_precise_x(String value);
+	String get_precise_x();
+	void set_precise_y(String value);
+	String get_precise_y();
+	void set_precise_rotation(String value);
+	String get_precise_rotation();
+	void set_linear_velocity_x(String value);
+	String get_linear_velocity_x();
+	void set_linear_velocity_y(String value);
+	String get_linear_velocity_y();
+	void set_angular_velocity(String value);
+	String get_angular_velocity();
+	void set_mass(String value);
+	String get_mass() const;
 
 	void set_timescale(real_t value);
 
-	void set_gbody_mass(real_t value);
-	real_t get_gbody_mass() const;
-
 	void set_significance(bool value);
 	bool get_significance() const;
+
+	void set_is_rigid(bool value);
+	bool get_is_rigid() const;
 };
 
 #endif

@@ -34,8 +34,8 @@ void GravityIntegrator::integrate(const real_t delta, const real_t timescale,
 
 	auto calc_premass = [this](const GravityBody &node1,
 								const GravityBody &node2) {
-		float128 diff_x = node2.x - node1.x;
-		float128 diff_y = node2.y - node1.y;
+		float128 diff_x = node2.precise_x - node1.precise_x;
+		float128 diff_y = node2.precise_y - node1.precise_y;
 		float128 squared_distance = diff_x * diff_x + diff_y * diff_y;
 		float128 distance = sqrtl(squared_distance);
 		return std::pair<float128, float128>(
@@ -62,8 +62,8 @@ void GravityIntegrator::integrate(const real_t delta, const real_t timescale,
 			node_j->set_timescale(timescale);
 			std::pair<float128, float128> accel_premass =
 					calc_premass(*node_j, *node_i);
-			node_j->apply_accel(accel_premass.first * node_i->internal_mass,
-					accel_premass.second * node_i->internal_mass);
+			node_j->apply_accel(accel_premass.first * node_i->mass,
+					accel_premass.second * node_i->mass);
 		}
 		for (int j = i + 1; j < significant_bodies.size(); ++j) {
 			GravityBody *node_j =
@@ -73,10 +73,10 @@ void GravityIntegrator::integrate(const real_t delta, const real_t timescale,
 			}
 			std::pair<float128, float128> accel_premass =
 					calc_premass(*node_i, *node_j);
-			node_i->apply_accel(accel_premass.first * node_j->internal_mass,
-					accel_premass.second * node_j->internal_mass);
-			node_j->apply_accel(-accel_premass.first * node_i->internal_mass,
-					-accel_premass.second * node_i->internal_mass);
+			node_i->apply_accel(accel_premass.first * node_j->mass,
+					accel_premass.second * node_j->mass);
+			node_j->apply_accel(-accel_premass.first * node_i->mass,
+					-accel_premass.second * node_i->mass);
 		}
 	}
 }
