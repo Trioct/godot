@@ -5,6 +5,10 @@
 void GravityBody::_bind_methods() {
 	ClassDB::bind_method("_sync_pos", &GravityBody::_sync_pos);
 
+	ClassDB::bind_method(D_METHOD("apply_impulse", "offset", "impulse"), &GravityBody::apply_impulse);
+	ClassDB::bind_method(D_METHOD("apply_central_impulse", "impulse"), &GravityBody::apply_central_impulse);
+	ClassDB::bind_method(D_METHOD("apply_torque_impulse", "impulse"), &GravityBody::apply_torque_impulse);
+
 	ClassDB::bind_method(D_METHOD("set_precise_x", "value"), &GravityBody::set_precise_x);
 	ClassDB::bind_method(D_METHOD("get_precise_x"), &GravityBody::get_precise_x);
 	ClassDB::bind_method(D_METHOD("set_precise_y", "value"), &GravityBody::set_precise_y);
@@ -23,6 +27,7 @@ void GravityBody::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_is_rigid"), &GravityBody::get_is_rigid);
 	ClassDB::bind_method(D_METHOD("set_significance", "value"), &GravityBody::set_significance);
 	ClassDB::bind_method(D_METHOD("get_significance"), &GravityBody::get_significance);
+	ClassDB::bind_method(D_METHOD("get_prediction"), &GravityBody::get_prediction);
 
 	ADD_PROPERTY(PropertyInfo(Variant::STRING, "precise_x"), "set_precise_x", "get_precise_x");
 	ADD_PROPERTY(PropertyInfo(Variant::STRING, "precise_y"), "set_precise_y", "get_precise_y");
@@ -44,11 +49,19 @@ GravityBody::GravityBody() :
 	linear_vel_y = 0.0;
 	angular_vel = 0.0;
 	mass = 1.0;
+
+	prediction = PoolVector2Array();
+
+	previous_timescale = 1.0;
 	timescale = 1.0;
-	last_accel_x = 0.0;
-	last_accel_y = 0.0;
 	is_rigid = false;
 	is_significant = false;
+
+	sync_to_physics = false;
+	last_impulses = {};
+	last_accel_x = 0.0;
+	last_accel_y = 0.0;
+	last_accel_angular = 0.0;
 }
 GravityBody::~GravityBody() {}
 
@@ -77,6 +90,8 @@ void GravityBody::_notification(int p_what) {
 
 			linear_vel_x += last_accel_x * warped_delta;
 			linear_vel_y += last_accel_y * warped_delta;
+			angular_vel += last_accel_angular * warped_delta;
+
 			precise_x += linear_vel_x * warped_delta;
 			precise_y += linear_vel_y * warped_delta;
 			precise_rotation += angular_vel * warped_delta;
@@ -89,11 +104,19 @@ void GravityBody::_notification(int p_what) {
 				Physics2DServer *server = Physics2DServer::get_singleton();
 				server->body_set_state(rid, Physics2DServer::BODY_STATE_LINEAR_VELOCITY, Vector2(linear_vel_x, linear_vel_y) * timescale);
 				server->body_set_state(rid, Physics2DServer::BODY_STATE_ANGULAR_VELOCITY, (float)(angular_vel * timescale));
+				for (int i = 0; i < last_impulses.size(); ++i) {
+					Vector2 offset = last_impulses[i].first;
+					Vector2 impulse = last_impulses[i].second;
+					server->body_apply_impulse(rid, offset, impulse * warped_delta);
+				}
+				sync_to_physics = last_impulses.size() > 0;
+				last_impulses.clear();
 				previous_timescale = timescale;
 			}
 
 			last_accel_x = 0.0;
 			last_accel_y = 0.0;
+			last_accel_angular = 0.0;
 		} break;
 	}
 }
@@ -102,7 +125,7 @@ void GravityBody::_sync_pos(Object *p_state) {
 	if (is_rigid) {
 		Physics2DDirectBodyState *state = Object::cast_to<Physics2DDirectBodyState>(p_state);
 		ERR_FAIL_COND_MSG(!state, "Method '_direct_state_changed' must receive a valid Physics2DDirectBodyState object as argument");
-		if (state->get_contact_count() > 0) {
+		if (sync_to_physics || state->get_contact_count() > 0) {
 			set_block_transform_notify(true);
 
 			Transform2D new_transform = state->get_transform();
@@ -115,6 +138,7 @@ void GravityBody::_sync_pos(Object *p_state) {
 			precise_rotation = new_transform.get_rotation();
 
 			set_block_transform_notify(false);
+			sync_to_physics = false;
 		}
 	}
 }
@@ -122,6 +146,19 @@ void GravityBody::_sync_pos(Object *p_state) {
 void GravityBody::apply_accel(float128 accel_x, float128 accel_y) {
 	last_accel_x += accel_x;
 	last_accel_y += accel_y;
+}
+
+void GravityBody::apply_impulse(Vector2 offset, Vector2 impulse) {
+	last_impulses.push_back({ offset, impulse });
+}
+
+void GravityBody::apply_central_impulse(Vector2 impulse) {
+	last_accel_x += impulse.x / mass;
+	last_accel_y += impulse.y / mass;
+}
+
+void GravityBody::apply_torque_impulse(float impulse) {
+	last_accel_angular += impulse / mass;
 }
 
 void GravityBody::set_precise_x(String value) {
@@ -215,4 +252,8 @@ void GravityBody::set_is_rigid(bool value) {
 
 bool GravityBody::get_is_rigid() const {
 	return is_rigid;
+}
+
+PoolVector2Array GravityBody::get_prediction() const {
+	return prediction;
 }

@@ -369,3 +369,4 @@ compile_commands.json
 .clangd/
 .cache/
 compile.sh
+update-package.sh

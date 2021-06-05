@@ -19,16 +19,20 @@ private:
 	float128 linear_vel_y;
 
 	float128 angular_vel;
-
 	float128 mass;
+
+	PoolVector2Array prediction;
 
 	float previous_timescale;
 	float timescale;
 	bool is_rigid;
 	bool is_significant;
 
+	bool sync_to_physics;
+	Vector<std::pair<Vector2, Vector2> > last_impulses;
 	float128 last_accel_x;
 	float128 last_accel_y;
+	float128 last_accel_angular;
 
 protected:
 	static void _bind_methods();
@@ -41,6 +45,10 @@ public:
 	void _sync_pos(Object *p_state);
 
 	void apply_accel(float128 accel_x, float128 accel_y);
+
+	void apply_impulse(Vector2 offset, Vector2 impulse);
+	void apply_central_impulse(Vector2 impulse);
+	void apply_torque_impulse(float impulse);
 
 	// for use only for gdscript
 	void set_precise_x(String value);
@@ -63,6 +71,8 @@ public:
 
 	void set_is_rigid(bool value);
 	bool get_is_rigid() const;
+
+	PoolVector2Array get_prediction() const;
 };
 
 #endif
