@@ -140,7 +140,9 @@ void GravityIntegrator::predict(Variant p_scene_tree, Variant p_relative, real_t
 		prediction_states = (PredictionState *)std::realloc(prediction_states, sizeof(PredictionState) * ps_size);
 	}
 
-	float128 max_error = 1.0 / (1.0 / pow(sin(pred_max_err * 3.1415 / 180), 2) - 1);
+	// wtf was this???
+	// float128 max_error = 1.0 / (1.0 / pow(sin(pred_max_err * 3.14159265358979 / 180), 2) - 1);
+	const float128 max_error = pow(tan(pred_max_err * 3.14159265358979 / 180), 2);
 
 	for (int i = 0; i < s_bodies.size() + i_bodies.size(); ++i) {
 		GravityBody *node_i;
@@ -166,7 +168,7 @@ void GravityIntegrator::predict(Variant p_scene_tree, Variant p_relative, real_t
 		//node_i->prediction.append(Vector2(0, 0));
 	}
 
-	float128 max_fd_ratio = 1.0;
+	float128 max_fd_ratio = 0.0;
 	for (int i = 0; i < pred_max_steps && duration > 0; ++i) {
 		for (int j = 0; j < s_bodies.size(); ++j) {
 			GravityBody *node_j =
@@ -213,7 +215,6 @@ void GravityIntegrator::predict(Variant p_scene_tree, Variant p_relative, real_t
 			float128 distance = state.vel_x * state.vel_x + state.vel_y * state.vel_y;
 			max_fd_ratio = std::max(max_fd_ratio, timestep * timestep * accel / distance);
 		}
-
 		float128 delta = timestep * sqrt(max_error / max_fd_ratio);
 		duration -= delta;
 
