@@ -9,9 +9,9 @@ import pickle
 import sys
 from collections import OrderedDict
 
+import gles_builders
 # Local
 import methods
-import gles_builders
 from platform_methods import run_in_subprocess
 
 # scan possible build platforms

@@ -5,6 +5,7 @@
 #include "gravity_integrator.h"
 
 void register_spacetime_types() {
+	ClassDB::register_class<IntegrationStats>();
 	ClassDB::register_class<GravityIntegrator>();
 	ClassDB::register_class<GravityBody>();
 }

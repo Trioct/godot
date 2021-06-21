@@ -6,33 +6,26 @@
 
 typedef long double float128;
 
-class GravityBody : public PhysicsBody2D {
+class GravityBody : public PhysicsBody2D, PrecisePosition {
 	GDCLASS(GravityBody, PhysicsBody2D);
 	friend class GravityIntegrator;
 
 private:
-	float128 precise_x;
-	float128 precise_y;
 	float128 precise_rotation;
-
-	float128 linear_vel_x;
-	float128 linear_vel_y;
-
 	float128 angular_vel;
 	float128 mass;
 
 	PoolVector2Array prediction;
 
-	float previous_timescale;
-	float timescale;
+	real_t previous_timescale;
+	real_t timescale;
 	bool is_rigid;
 	bool is_significant;
 
+	bool skip_next_process;
 	bool sync_to_physics;
 	Vector<std::pair<Vector2, Vector2> > last_impulses;
-	float128 last_accel_x;
-	float128 last_accel_y;
-	float128 last_accel_angular;
+	float128 accel_angular;
 
 protected:
 	static void _bind_methods();
@@ -45,10 +38,11 @@ public:
 	void _sync_pos(Object *p_state);
 
 	void apply_accel(float128 accel_x, float128 accel_y);
+	void move(real_t delta, bool skip_next_process = false);
 
 	void apply_impulse(Vector2 offset, Vector2 impulse);
 	void apply_central_impulse(Vector2 impulse);
-	void apply_torque_impulse(float impulse);
+	void apply_torque_impulse(real_t impulse);
 
 	// for use only for gdscript
 	void set_precise_x(String value);

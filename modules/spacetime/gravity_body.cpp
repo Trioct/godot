@@ -59,9 +59,9 @@ GravityBody::GravityBody() :
 
 	sync_to_physics = false;
 	last_impulses = {};
-	last_accel_x = 0.0;
-	last_accel_y = 0.0;
-	last_accel_angular = 0.0;
+	accel_x = 0.0;
+	accel_y = 0.0;
+	accel_angular = 0.0;
 }
 GravityBody::~GravityBody() {}
 
@@ -85,18 +85,15 @@ void GravityBody::_notification(int p_what) {
 			}
 		} break;
 		case NOTIFICATION_INTERNAL_PHYSICS_PROCESS: {
-			float delta = get_physics_process_delta_time();
+			real_t delta = get_physics_process_delta_time();
 			float128 warped_delta = delta * timescale;
 
-			linear_vel_x += last_accel_x * warped_delta;
-			linear_vel_y += last_accel_y * warped_delta;
-			angular_vel += last_accel_angular * warped_delta;
+			if (!skip_next_process) {
+				move(warped_delta);
+			}
 
-			precise_x += linear_vel_x * warped_delta;
-			precise_y += linear_vel_y * warped_delta;
+			angular_vel += accel_angular * warped_delta;
 			precise_rotation += angular_vel * warped_delta;
-
-			set_position(Vector2(precise_x, precise_y));
 			set_rotation(precise_rotation);
 
 			if (is_rigid) {
@@ -114,9 +111,8 @@ void GravityBody::_notification(int p_what) {
 				previous_timescale = timescale;
 			}
 
-			last_accel_x = 0.0;
-			last_accel_y = 0.0;
-			last_accel_angular = 0.0;
+			accel_angular = 0.0;
+			skip_next_process = false;
 		} break;
 	}
 }
@@ -144,8 +140,20 @@ void GravityBody::_sync_pos(Object *p_state) {
 }
 
 void GravityBody::apply_accel(float128 accel_x, float128 accel_y) {
-	last_accel_x += accel_x;
-	last_accel_y += accel_y;
+	this->accel_x += accel_x;
+	this->accel_y += accel_y;
+}
+
+void GravityBody::move(real_t delta, bool skip_next_process) {
+	linear_vel_x += accel_x * delta;
+	linear_vel_y += accel_y * delta;
+	precise_x += linear_vel_x * delta;
+	precise_y += linear_vel_y * delta;
+
+	set_position(Vector2(precise_x, precise_y));
+	accel_x = 0.0;
+	accel_y = 0.0;
+	this->skip_next_process = skip_next_process;
 }
 
 void GravityBody::apply_impulse(Vector2 offset, Vector2 impulse) {
@@ -153,12 +161,12 @@ void GravityBody::apply_impulse(Vector2 offset, Vector2 impulse) {
 }
 
 void GravityBody::apply_central_impulse(Vector2 impulse) {
-	last_accel_x += impulse.x / mass;
-	last_accel_y += impulse.y / mass;
+	accel_x += impulse.x / mass;
+	accel_y += impulse.y / mass;
 }
 
-void GravityBody::apply_torque_impulse(float impulse) {
-	last_accel_angular += impulse / mass;
+void GravityBody::apply_torque_impulse(real_t impulse) {
+	accel_angular += impulse / mass;
 }
 
 void GravityBody::set_precise_x(String value) {
