@@ -215,7 +215,7 @@ static bool _have_exact_arguments(const MethodBind *p_method, const Vector<GDScr
 }
 
 GDScriptCodeGenerator::Address GDScriptCompiler::_parse_expression(CodeGen &codegen, Error &r_error, const GDScriptParser::ExpressionNode *p_expression, bool p_root, bool p_initializer, const GDScriptCodeGenerator::Address &p_index_addr) {
-	if (p_expression->is_constant && !(p_expression->type == GDScriptParser::Node::ARRAY || p_expression->type == GDScriptParser::Node::DICTIONARY)) {
+	if (p_expression->is_constant && p_expression->type != GDScriptParser::Node::ARRAY && p_expression->type != GDScriptParser::Node::DICTIONARY) {
 		return codegen.add_constant(p_expression->reduced_value);
 	}
 
@@ -225,7 +225,6 @@ GDScriptCodeGenerator::Address GDScriptCompiler::_parse_expression(CodeGen &code
 		case GDScriptParser::Node::IDENTIFIER: {
 			// Look for identifiers in current scope.
 			const GDScriptParser::IdentifierNode *in = static_cast<const GDScriptParser::IdentifierNode *>(p_expression);
-
 			StringName identifier = in->name;
 
 			// Try function parameters.
@@ -402,11 +401,18 @@ GDScriptCodeGenerator::Address GDScriptCompiler::_parse_expression(CodeGen &code
 		} break;
 		case GDScriptParser::Node::ARRAY: {
 			const GDScriptParser::ArrayNode *an = static_cast<const GDScriptParser::ArrayNode *>(p_expression);
-			Vector<GDScriptCodeGenerator::Address> values;
 
 			// Create the result temporary first since it's the last to be killed.
 			GDScriptDataType array_type = _gdtype_from_datatype(an->get_datatype());
 			GDScriptCodeGenerator::Address result = codegen.add_temporary(array_type);
+
+			if (p_expression->is_constant) {
+				GDScriptCodeGenerator::Address value = codegen.add_constant(p_expression->reduced_value);
+				gen->write_duplicate_array(result, value);
+				return result;
+			}
+
+			Vector<GDScriptCodeGenerator::Address> values;
 
 			for (int i = 0; i < an->elements.size(); i++) {
 				GDScriptCodeGenerator::Address val = _parse_expression(codegen, r_error, an->elements[i]);
@@ -432,7 +438,6 @@ GDScriptCodeGenerator::Address GDScriptCompiler::_parse_expression(CodeGen &code
 		} break;
 		case GDScriptParser::Node::DICTIONARY: {
 			const GDScriptParser::DictionaryNode *dn = static_cast<const GDScriptParser::DictionaryNode *>(p_expression);
-			Vector<GDScriptCodeGenerator::Address> elements;
 
 			// Create the result temporary first since it's the last to be killed.
 			GDScriptDataType dict_type;
@@ -440,6 +445,14 @@ GDScriptCodeGenerator::Address GDScriptCompiler::_parse_expression(CodeGen &code
 			dict_type.kind = GDScriptDataType::BUILTIN;
 			dict_type.builtin_type = Variant::DICTIONARY;
 			GDScriptCodeGenerator::Address result = codegen.add_temporary(dict_type);
+
+			if (p_expression->is_constant) {
+				GDScriptCodeGenerator::Address value = codegen.add_constant(p_expression->reduced_value);
+				gen->write_duplicate_dictionary(result, value);
+				return result;
+			}
+
+			Vector<GDScriptCodeGenerator::Address> elements;
 
 			for (int i = 0; i < dn->elements.size(); i++) {
 				// Key.
@@ -1984,54 +1997,84 @@ GDScriptFunction *GDScriptCompiler::_parse_function(Error &r_error, GDScript *p_
 	if (!p_for_lambda && (is_implicit_initializer || is_for_ready)) {
 		// Initialize class fields.
 		for (int i = 0; i < p_class->members.size(); i++) {
-			if (p_class->members[i].type != GDScriptParser::ClassNode::Member::VARIABLE) {
-				continue;
-			}
-			const GDScriptParser::VariableNode *field = p_class->members[i].variable;
-			if (field->onready != is_for_ready) {
-				// Only initialize in _ready.
-				continue;
-			}
-
-			GDScriptParser::DataType field_type = field->get_datatype();
-
-			GDScriptCodeGenerator::Address dst_address(GDScriptCodeGenerator::Address::MEMBER, codegen.script->member_indices[field->identifier->name].index, _gdtype_from_datatype(field->get_datatype()));
-			if (field->initializer) {
-				// Emit proper line change.
-				codegen.generator->write_newline(field->initializer->start_line);
-
-				// For typed arrays we need to make sure this is already initialized correctly so typed assignment work.
-				if (field_type.is_hard_type() && field_type.builtin_type == Variant::ARRAY && field_type.has_container_element_type()) {
-					if (field_type.has_container_element_type()) {
-						codegen.generator->write_construct_typed_array(dst_address, _gdtype_from_datatype(field_type.get_container_element_type(), codegen.script), Vector<GDScriptCodeGenerator::Address>());
-					} else {
-						codegen.generator->write_construct_array(dst_address, Vector<GDScriptCodeGenerator::Address>());
+			switch (p_class->members[i].type) {
+				case GDScriptParser::ClassNode::Member::VARIABLE: {
+					const GDScriptParser::VariableNode *field = p_class->members[i].variable;
+					if (field->onready != is_for_ready) {
+						// Only initialize in _ready.
+						continue;
 					}
-				}
-				GDScriptCodeGenerator::Address src_address = _parse_expression(codegen, r_error, field->initializer, false, true);
-				if (r_error) {
-					memdelete(codegen.generator);
-					return nullptr;
-				}
 
-				if (field->use_conversion_assign) {
-					codegen.generator->write_assign_with_conversion(dst_address, src_address);
-				} else {
+					GDScriptParser::DataType field_type = field->get_datatype();
+
+					GDScriptCodeGenerator::Address dst_address(GDScriptCodeGenerator::Address::MEMBER, codegen.script->member_indices[field->identifier->name].index, _gdtype_from_datatype(field->get_datatype()));
+					if (field->initializer) {
+						// Emit proper line change.
+						codegen.generator->write_newline(field->initializer->start_line);
+
+						// For typed arrays we need to make sure this is already initialized correctly so typed assignment work.
+						if (field_type.is_hard_type() && field_type.builtin_type == Variant::ARRAY && field_type.has_container_element_type()) {
+							if (field_type.has_container_element_type()) {
+								codegen.generator->write_construct_typed_array(dst_address, _gdtype_from_datatype(field_type.get_container_element_type(), codegen.script), Vector<GDScriptCodeGenerator::Address>());
+							} else {
+								codegen.generator->write_construct_array(dst_address, Vector<GDScriptCodeGenerator::Address>());
+							}
+						}
+						GDScriptCodeGenerator::Address src_address = _parse_expression(codegen, r_error, field->initializer, false, true);
+						if (r_error) {
+							memdelete(codegen.generator);
+							return nullptr;
+						}
+
+						if (field->use_conversion_assign) {
+							codegen.generator->write_assign_with_conversion(dst_address, src_address);
+						} else {
+							codegen.generator->write_assign(dst_address, src_address);
+						}
+						if (src_address.mode == GDScriptCodeGenerator::Address::TEMPORARY) {
+							codegen.generator->pop_temporary();
+						}
+					} else if (field->get_datatype().is_hard_type()) {
+						codegen.generator->write_newline(field->start_line);
+
+						// Initialize with default for type.
+						if (field_type.has_container_element_type()) {
+							codegen.generator->write_construct_typed_array(dst_address, _gdtype_from_datatype(field_type.get_container_element_type(), codegen.script), Vector<GDScriptCodeGenerator::Address>());
+						} else if (field_type.kind == GDScriptParser::DataType::BUILTIN) {
+							codegen.generator->write_construct(dst_address, field_type.builtin_type, Vector<GDScriptCodeGenerator::Address>());
+						}
+						// The `else` branch is for objects, in such case we leave it as `null`.
+					}
+				} break;
+				case GDScriptParser::ClassNode::Member::CONSTANT: {
+					if (is_for_ready) {
+						continue;
+					}
+					const GDScriptParser::ConstantNode *field = p_class->members[i].constant;
+					if (!field->initializer) {
+						continue;
+					}
+					codegen.generator->write_newline(field->initializer->start_line);
+
+					GDScriptParser::DataType init_type = field->initializer->get_datatype();
+					if (init_type.builtin_type != Variant::Type::ARRAY && init_type.builtin_type != Variant::Type::DICTIONARY) {
+						continue;
+					}
+
+					GDScriptCodeGenerator::Address dst_address(GDScriptCodeGenerator::Address::MEMBER, codegen.script->member_indices[field->identifier->name].index, _gdtype_from_datatype(field->get_datatype()));
+					GDScriptCodeGenerator::Address src_address = _parse_expression(codegen, r_error, field->initializer, false, true);
+					if (r_error) {
+						memdelete(codegen.generator);
+						return nullptr;
+					}
+
 					codegen.generator->write_assign(dst_address, src_address);
-				}
-				if (src_address.mode == GDScriptCodeGenerator::Address::TEMPORARY) {
-					codegen.generator->pop_temporary();
-				}
-			} else if (field->get_datatype().is_hard_type()) {
-				codegen.generator->write_newline(field->start_line);
-
-				// Initialize with default for type.
-				if (field_type.has_container_element_type()) {
-					codegen.generator->write_construct_typed_array(dst_address, _gdtype_from_datatype(field_type.get_container_element_type(), codegen.script), Vector<GDScriptCodeGenerator::Address>());
-				} else if (field_type.kind == GDScriptParser::DataType::BUILTIN) {
-					codegen.generator->write_construct(dst_address, field_type.builtin_type, Vector<GDScriptCodeGenerator::Address>());
-				}
-				// The `else` branch is for objects, in such case we leave it as `null`.
+					if (src_address.mode == GDScriptCodeGenerator::Address::TEMPORARY) {
+						codegen.generator->pop_temporary();
+					}
+				} break;
+				default:
+					break;
 			}
 		}
 	}
