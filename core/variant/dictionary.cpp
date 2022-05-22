@@ -42,6 +42,7 @@
 struct DictionaryPrivate {
 	SafeRefCount refcount;
 	Variant *read_only = nullptr; // If enabled, a pointer is used to a temporary value that is used to return read-only values.
+	bool is_constant = false; // If enabled, we are permanently read-only.
 	HashMap<Variant, Variant, VariantHasher, VariantComparator> variant_map;
 };
 
@@ -369,12 +370,19 @@ void Dictionary::set_read_only(bool p_enable) {
 	if (p_enable) {
 		_p->read_only = memnew(Variant);
 	} else {
+		ERR_FAIL_COND_MSG(_p->is_constant, "Dictionary is a constant.");
 		memdelete(_p->read_only);
 		_p->read_only = nullptr;
 	}
 }
 bool Dictionary::is_read_only() const {
 	return _p->read_only != nullptr;
+}
+
+void Dictionary::_assign_as_constant(const Dictionary &p_dictionary) {
+	operator=(p_dictionary);
+	_p->is_constant = true;
+	set_read_only(true);
 }
 
 Dictionary Dictionary::recursive_duplicate(bool p_deep, int recursion_count) const {

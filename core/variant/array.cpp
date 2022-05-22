@@ -44,6 +44,7 @@ public:
 	SafeRefCount refcount;
 	Vector<Variant> array;
 	Variant *read_only = nullptr; // If enabled, a pointer is used to a temporary value that is used to return read-only values.
+	bool is_constant = false; // If enabled, we are permanently read-only.
 	ContainerTypeValidate typed;
 };
 
@@ -705,6 +706,7 @@ void Array::set_read_only(bool p_enable) {
 	if (p_enable) {
 		_p->read_only = memnew(Variant);
 	} else {
+		ERR_FAIL_COND_MSG(_p->is_constant, "Array is a constant.");
 		memdelete(_p->read_only);
 		_p->read_only = nullptr;
 	}
@@ -712,6 +714,12 @@ void Array::set_read_only(bool p_enable) {
 
 bool Array::is_read_only() const {
 	return _p->read_only != nullptr;
+}
+
+void Array::_assign_as_constant(const Array &p_array) {
+	operator=(p_array);
+	_p->is_constant = true;
+	set_read_only(true);
 }
 
 Array::Array(const Array &p_from) {

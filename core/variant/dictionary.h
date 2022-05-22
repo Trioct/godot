@@ -87,6 +87,8 @@ public:
 	void set_read_only(bool p_enable);
 	bool is_read_only() const;
 
+	void _assign_as_constant(const Dictionary &p_dictionary);
+
 	const void *id() const;
 
 	Dictionary(const Dictionary &p_from);

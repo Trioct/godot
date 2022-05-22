@@ -197,7 +197,17 @@ GDScriptFunction *GDScriptByteCodeGenerator::write_end() {
 		function->constants.resize(constant_map.size());
 		function->_constants_ptr = function->constants.ptrw();
 		for (const KeyValue<Variant, int> &K : constant_map) {
-			function->constants.write[K.value] = K.key;
+			Variant *value = &function->constants.write[K.value];
+
+			if (K.key.get_type() == Variant::Type::ARRAY) {
+				*value = Array();
+				VariantInternal::get_array(value)->_assign_as_constant(K.key);
+			} else if (K.key.get_type() == Variant::Type::DICTIONARY) {
+				*value = Dictionary();
+				VariantInternal::get_dictionary(value)->_assign_as_constant(K.key);
+			} else {
+				*value = K.key;
+			}
 		}
 	} else {
 		function->_constants_ptr = nullptr;
